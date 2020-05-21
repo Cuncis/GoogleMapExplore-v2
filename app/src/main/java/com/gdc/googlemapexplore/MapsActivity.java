@@ -15,11 +15,21 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.Html;
+import android.text.Spanned;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.gdc.googlemapexplore.api.ApiClient;
+import com.gdc.googlemapexplore.api.ApiInterface;
+import com.gdc.googlemapexplore.model.GMapResponse;
+import com.gdc.googlemapexplore.model.LegsItem;
+import com.gdc.googlemapexplore.model.RoutesItem;
+import com.gdc.googlemapexplore.model.StepsItem;
+import com.gdc.googlemapexplore.util.Constant;
 import com.gdc.googlemapexplore.ver1.FetchURL;
 import com.gdc.googlemapexplore.ver1.TaskLoadedCallback;
 import com.gdc.googlemapexplore.ver2.HttpConnection;
@@ -39,6 +49,7 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.google.gson.Gson;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -47,6 +58,10 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, TaskLoadedCallback {
     private static final String TAG = "_MapsActivity";
@@ -78,6 +93,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     .findFragmentById(R.id.map);
             mapFragment.getMapAsync(this);
         }
+
+        getDirectionJson();
+
+//        getJson();
 
         initListener();
 
@@ -190,8 +209,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    private class ParserTask extends
-            AsyncTask<String, Integer, List<List<HashMap<String, String>>>> {
+    private class ParserTask extends AsyncTask<String, Integer, List<List<HashMap<String, String>>>> {
 
         @Override
         protected List<List<HashMap<String, String>>> doInBackground(
@@ -274,18 +292,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         String url = "https://maps.googleapis.com/maps/api/directions/" + output + "?" + parameters + "&key=" + getString(R.string.google_maps_key);
         return url;
     }
-
-//    private String getMapsApiDirectionsUrl() {
-//        String origin = "origin=" + LOWER_MANHATTAN.latitude + "," + LOWER_MANHATTAN.longitude;
-//        String waypoints = "waypoints=optimize:true|" + BROOKLYN_BRIDGE.latitude + "," + BROOKLYN_BRIDGE.longitude + "|";
-//        String destination = "destination=" + WALL_STREET.latitude + "," + WALL_STREET.longitude;
-//
-//        String sensor = "sensor=false";
-//        String params = origin + "&" + waypoints + "&"  + destination + "&" + sensor;
-//        String output = "json";
-//        return "https://maps.googleapis.com/maps/api/directions/"
-//                + output + "?" + params;
-//    }
 
     private boolean checkGps() {
         LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
@@ -377,30 +383,95 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         btn_getRoute = findViewById(R.id.btn_getRoute);
     }
 
+
+    List<RoutesItem> routesItems = new ArrayList<>();
+    List<LegsItem> legsItems = new ArrayList<>();
+    List<StepsItem> stepsItems = new ArrayList<>();
     private void getDirectionJson() {
+        String waypoints = "optimize:true|"
+                + HOME.latitude + "," + HOME.longitude
+                + "|" + "|" + T_JUNCTION.latitude + "," + T_JUNCTION.longitude
+                + "|" + "|" + LIGHT_PARK.latitude + "," + LIGHT_PARK.longitude
+                + "|" + GAS_STATION.latitude + ","
+                + GAS_STATION.longitude;
 
-    }
+        String str_origin = HOME.latitude + "," + HOME.longitude;
+        // Destination of route
+        String str_dest = GAS_STATION.latitude + "," + GAS_STATION.longitude;
 
-//    private void getGmapData() {
-//        ApiInterface apiInterface = ApiClient.getClient().create(ApiInterface.class);
-//        Call<GMapResponse> call = apiInterface.getGmapData("AIzaSyAPBJLBVxvOLO2LinOTDOc-iAKzrsqyzAE",
-//                "Surabaya");
-//        call.enqueue(new Callback<GMapResponse>() {
-//            @Override
-//            public void onResponse(Call<GMapResponse> call, Response<GMapResponse> response) {
-//                if (response.isSuccessful()) {
-//                    Log.d(TAG, "onResponse: " + response.body());
-//                } else {
-//                    Toast.makeText(MapsActivity.this, "" + response.message(), Toast.LENGTH_SHORT).show();
-//                }
-//            }
+        ApiInterface apiInterface = ApiClient.getClient().create(ApiInterface.class);
+        Call<GMapResponse> call = apiInterface.getGmapData(str_origin,
+                waypoints,
+                str_dest,
+                "true",
+                "driving",
+                getString(R.string.google_maps_key));
+
+        call.enqueue(new Callback<GMapResponse>() {
+            @Override
+            public void onResponse(Call<GMapResponse> call, Response<GMapResponse> response) {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "onResponse: Data from Server: " + response.body());
+                    routesItems.addAll(response.body().getRoutes());
+                    Log.d(TAG, "onResponse: Data Routes: " + routesItems);
+                    for (int i = 0; i < routesItems.size(); i++) {
+                        legsItems.addAll(routesItems.get(i).getLegs());
+                        Log.d(TAG, "onResponse: Data Legs: " + legsItems);
+                        for (int j = 0; j < legsItems.size(); j++) {
+                            stepsItems.addAll(legsItems.get(j).getSteps());
+                            Log.d(TAG, "onResponse: Data Steps: " + Html.fromHtml(stepsItems.get(j).getHtmlInstructions()).toString());
+                        }
+                    }
+
+//                    if (googleMap != null) {
+//                        googleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
+//                            @Override
+//                            public View getInfoWindow(Marker marker) {
+//                                return null;
+//                            }
 //
-//            @Override
-//            public void onFailure(Call<GMapResponse> call, Throwable t) {
-//                Toast.makeText(MapsActivity.this, "Error2: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-//            }
-//        });
-//    }
+//                            @Override
+//                            public View getInfoContents(Marker marker) {
+//                                View v = getLayoutInflater().inflate(R.layout.infowindow_layout, null);
+//                                TextView textView = v.findViewById(R.id.tv_desc);
+//                                for (int i = 0; i < stepsItems.size()-1; i++) {
+//                                    Spanned spannedContent = Html.fromHtml(stepsItems.get(i).getHtmlInstructions());
+//                                    textView.setText(spannedContent, TextView.BufferType.SPANNABLE);
+//                                    Log.d(TAG, "getInfoContents: Info Content: " + Html.fromHtml(stepsItems.get(i).getHtmlInstructions()));
+//                                }
+//                                return v;
+//                            }
+//                        });
+//                    }
+                } else {
+                    Toast.makeText(MapsActivity.this, "" + response.message(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<GMapResponse> call, Throwable t) {
+                Toast.makeText(MapsActivity.this, "Error: " + t.getMessage() , Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    private void getJson() {
+        GMapResponse response = new Gson().fromJson(Constant.directionsResponse, GMapResponse.class);
+        Log.d(TAG, "getJson: " + response);
+        Log.d(TAG, "onResponse: Data from Server: " + response);
+        routesItems.addAll(response.getRoutes());
+        Log.d(TAG, "onResponse: Data Routes: " + routesItems.size());
+        for (int i = 0; i < routesItems.size(); i++) {
+            legsItems.addAll(routesItems.get(i).getLegs());
+            Log.d(TAG, "onResponse: Data Legs: " + legsItems.size());
+            for (int j = 0; j < legsItems.size(); j++) {
+                stepsItems.addAll(legsItems.get(j).getSteps());
+                for (int k = 0; k < stepsItems.size(); k++) {
+                    Log.d(TAG, "onResponse: Data Steps: " + Html.fromHtml(stepsItems.get(k).getHtmlInstructions()).toString());
+                }
+            }
+        }
+    }
 
     @Override
     public void onMapReady(GoogleMap map) {
