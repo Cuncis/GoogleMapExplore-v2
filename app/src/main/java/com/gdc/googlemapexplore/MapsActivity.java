@@ -1,11 +1,14 @@
 package com.gdc.googlemapexplore;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -13,6 +16,7 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Html;
@@ -31,6 +35,7 @@ import com.gdc.googlemapexplore.model.RoutesItem;
 import com.gdc.googlemapexplore.model.StepsItem;
 import com.gdc.googlemapexplore.util.Constant;
 import com.gdc.googlemapexplore.ver1.FetchURL;
+import com.gdc.googlemapexplore.ver1.Route;
 import com.gdc.googlemapexplore.ver1.TaskLoadedCallback;
 import com.gdc.googlemapexplore.ver2.HttpConnection;
 import com.gdc.googlemapexplore.ver2.PathJSONParser;
@@ -79,6 +84,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final LatLng LIGHT_PARK = new LatLng(-7.2404317, 112.6251765);
     private static final LatLng GAS_STATION = new LatLng(-7.2369845, 112.61866);
 
+    private static final LatLng GANG = new LatLng(-7.23746427675, 112.628799622);
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,7 +101,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             mapFragment.getMapAsync(this);
         }
 
-        getDirectionJson();
+//        getDirectionJson();
 
 //        getJson();
 
@@ -105,6 +112,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private void setPathGoogleMap() {
         MarkerOptions options = new MarkerOptions();
         options.position(HOME);
+        options.position(GANG);
         options.position(T_JUNCTION);
         options.position(LIGHT_PARK);
         options.position(GAS_STATION);
@@ -122,6 +130,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if (googleMap != null) {
             googleMap.addMarker(new MarkerOptions().position(HOME)
                     .title("First Point"));
+            googleMap.addMarker(new MarkerOptions().position(GANG)
+                    .title("Alternative Point"));
             googleMap.addMarker(new MarkerOptions().position(T_JUNCTION)
                     .title("Second Point"));
             googleMap.addMarker(new MarkerOptions().position(LIGHT_PARK)
@@ -152,10 +162,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 + "|" + "|" + T_JUNCTION.latitude + ","
                 + T_JUNCTION.longitude + "|" + GAS_STATION.latitude + ","
                 + GAS_STATION.longitude;
-        String OriDest = "origin="+HOME.latitude+","+HOME.longitude+"&destination="+GAS_STATION.latitude+","+GAS_STATION.longitude;
+        String OriDest = "origin=" + HOME.latitude + "," + HOME.longitude + "&destination=" + GAS_STATION.latitude + "," + GAS_STATION.longitude;
 
         String sensor = "sensor=false";
-        String params = OriDest+"&%20"+waypoints + "&" + sensor;
+        String params = OriDest + "&%20" + waypoints + "&" + sensor;
         String output = "json";
         String url = "https://maps.googleapis.com/maps/api/directions/"
                 + output + "?" + params;
@@ -165,9 +175,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private String getMapsApiDirectionsUrl3() {
         String waypoints = "waypoints=optimize:true|"
                 + HOME.latitude + "," + HOME.longitude
-                + "|" + "|" + T_JUNCTION.latitude + ","
-                + T_JUNCTION.longitude + "|" + GAS_STATION.latitude + ","
-                + GAS_STATION.longitude;
+                + "|" + "|" + GANG.latitude + "," + GANG.longitude
+                + "|" + "|" + T_JUNCTION.latitude + "," + T_JUNCTION.longitude
+                + "|" + GAS_STATION.latitude + "," + GAS_STATION.longitude;
 
         String str_origin = "origin=" + HOME.latitude + "," + HOME.longitude;
         // Destination of route
@@ -176,7 +186,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Sensor enabled
         String sensor = "sensor=true";
         String mode = "mode=driving";
-        String key = "key="+getResources().getString(R.string.google_maps_key);
+        String key = "key=" + getResources().getString(R.string.google_maps_key);
         // Building the parameters to the web service
         String parameters = str_origin + "&" + waypoints + "&" + str_dest + "&" + sensor + "&" + mode + "&" + key;
 
@@ -350,7 +360,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             lastLocation = location;
                             Log.d(TAG, "onSuccess: " + lastLocation);
 
-                            setPathGoogleMap();
+//                            setPathGoogleMap();
+//                            MarkerOptions options = new MarkerOptions();
+//                            options.position(HOME);
+//                            googleMap.addMarker(options);
+//                            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(HOME, 18));
+
+                            googleMap.setMyLocationEnabled(true);
+                            getJson();
                         }
                     }
                 });
@@ -387,6 +404,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     List<RoutesItem> routesItems = new ArrayList<>();
     List<LegsItem> legsItems = new ArrayList<>();
     List<StepsItem> stepsItems = new ArrayList<>();
+
     private void getDirectionJson() {
         String waypoints = "optimize:true|"
                 + HOME.latitude + "," + HOME.longitude
@@ -411,17 +429,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onResponse(Call<GMapResponse> call, Response<GMapResponse> response) {
                 if (response.isSuccessful()) {
-                    Log.d(TAG, "onResponse: Data from Server: " + response.body());
-                    routesItems.addAll(response.body().getRoutes());
-                    Log.d(TAG, "onResponse: Data Routes: " + routesItems);
-                    for (int i = 0; i < routesItems.size(); i++) {
-                        legsItems.addAll(routesItems.get(i).getLegs());
-                        Log.d(TAG, "onResponse: Data Legs: " + legsItems);
-                        for (int j = 0; j < legsItems.size(); j++) {
-                            stepsItems.addAll(legsItems.get(j).getSteps());
-                            Log.d(TAG, "onResponse: Data Steps: " + Html.fromHtml(stepsItems.get(j).getHtmlInstructions()).toString());
-                        }
-                    }
+
+//                    setRoutePath(response.body());
+
+//                    Log.d(TAG, "onResponse: Data from Server: " + response.body());
+//                    routesItems.addAll(response.body().getRoutes());
+//                    Log.d(TAG, "onResponse: Data Routes: " + routesItems);
+//                    for (int i = 0; i < routesItems.size(); i++) {
+//                        legsItems.addAll(routesItems.get(i).getLegs());
+//                        Log.d(TAG, "onResponse: Data Legs: " + legsItems);
+//                        for (int j = 0; j < legsItems.size(); j++) {
+//                            stepsItems.addAll(legsItems.get(j).getSteps());
+//                            Log.d(TAG, "onResponse: Data Steps: " + Html.fromHtml(stepsItems.get(j).getHtmlInstructions()).toString());
+//                        }
+//                    }
 
 //                    if (googleMap != null) {
 //                        googleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
@@ -450,11 +471,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             @Override
             public void onFailure(Call<GMapResponse> call, Throwable t) {
-                Toast.makeText(MapsActivity.this, "Error: " + t.getMessage() , Toast.LENGTH_SHORT).show();
+                Toast.makeText(MapsActivity.this, "Error: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
-    
+
+    ArrayList<LatLng> points = new ArrayList<>();
+
     private void getJson() {
         GMapResponse response = new Gson().fromJson(Constant.directionsResponse, GMapResponse.class);
         Log.d(TAG, "getJson: " + response);
@@ -467,10 +490,111 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             for (int j = 0; j < legsItems.size(); j++) {
                 stepsItems.addAll(legsItems.get(j).getSteps());
                 for (int k = 0; k < stepsItems.size(); k++) {
-                    Log.d(TAG, "onResponse: Data Steps: " + Html.fromHtml(stepsItems.get(k).getHtmlInstructions()).toString());
+//                    Log.d(TAG, "onResponse: Data Steps: " + Html.fromHtml(stepsItems.get(k).getHtmlInstructions()).toString());
+                    Log.d(TAG, "onResponse: Data Steps: " + stepsItems.get(k).getPolyline().getPoints());
+                    Log.d(TAG, "onResponse: Data Duration: " + stepsItems.get(k).getDuration().getText());
+                    Log.d(TAG, "onResponse: Data Distance: " + stepsItems.get(k).getDistance().getText());
+
+                    googleMap.addMarker(new MarkerOptions().position(new LatLng(stepsItems.get(k).getEndLocation().getLat(),
+                            stepsItems.get(k).getEndLocation().getLng())).title("Nasabah #" + (k + 1))
+                            .snippet(stepsItems.get(k).getDuration().getText()));
                 }
             }
         }
+
+        setRoutePath(response);
+    }
+
+    private void setRoutePath(GMapResponse body) {
+//        googleMap.clear();
+
+        googleMap.addMarker(new MarkerOptions().position(new LatLng(body.getRoutes().get(0).getLegs().get(0).getStartLocation().getLat(), body.getRoutes().get(0).getLegs().get(0).getStartLocation().getLng())).title("My Location"));
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(body.getRoutes().get(0).getLegs().get(0).getStartLocation().getLat(), body.getRoutes().get(0).getLegs().get(0).getStartLocation().getLng()), 18));
+
+        googleMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(final Marker marker) {
+                if (marker.getTitle().contains("Nasabah")) {
+                    final AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
+                    builder.setMessage("Buka Google Maps?")
+                            .setCancelable(true)
+                            .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                                public void onClick(@SuppressWarnings("unused") final DialogInterface dialog, @SuppressWarnings("unused") final int id) {
+                                    String latitude = String.valueOf(marker.getPosition().latitude);
+                                    String longitude = String.valueOf(marker.getPosition().longitude);
+                                    Uri gmmIntentUri = Uri.parse("google.navigation:q=" + latitude + "," + longitude);
+                                    Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                                    mapIntent.setPackage("com.google.android.apps.maps");
+
+                                    try{
+                                        if (mapIntent.resolveActivity(getPackageManager()) != null) {
+                                            startActivity(mapIntent);
+                                        }
+                                    }catch (NullPointerException e){
+                                        Log.e(TAG, "onClick: NullPointerException: Couldn't open map." + e.getMessage() );
+                                        Toast.makeText(MapsActivity.this, "Couldn't open map", Toast.LENGTH_SHORT).show();
+                                    }
+
+                                }
+                            })
+                            .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                                public void onClick(final DialogInterface dialog, @SuppressWarnings("unused") final int id) {
+                                    dialog.cancel();
+                                }
+                            });
+                    final AlertDialog alert = builder.create();
+                    alert.show();
+                } else {
+                    marker.hideInfoWindow();
+                }
+            }
+        });
+
+        RoutesItem route = body.getRoutes().get(0);
+        for (LegsItem legs : route.getLegs()) {
+            for (int i = 0; i < stepsItems.size(); i++) {
+                points.addAll(decodePoly(legs.getSteps().get(i).getPolyline().getPoints()));
+            }
+
+            PolylineOptions polylineOptions = new PolylineOptions();
+            polylineOptions.addAll(points);
+            polylineOptions.color(Color.BLUE);
+            googleMap.addPolyline(polylineOptions);
+        }
+    }
+
+    private List<LatLng> decodePoly(String encoded) {
+
+        List<LatLng> poly = new ArrayList<LatLng>();
+        int index = 0, len = encoded.length();
+        int lat = 0, lng = 0;
+
+        while (index < len) {
+            int b, shift = 0, result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            LatLng p = new LatLng((((double) lat / 1E5)),
+                    (((double) lng / 1E5)));
+            poly.add(p);
+        }
+
+        return poly;
     }
 
     @Override
